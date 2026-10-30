@@ -11,8 +11,8 @@ const state = {
   monogramText: 'TK',
   layoutCount: 1,         // 1, 2, 4, 8
   materialColor: 0xD4AF37,// Default Silk Gold
-  materialRoughness: 0.28,
-  materialMetalness: 0.85,
+  materialRoughness: 0.35,
+  materialMetalness: 0.60,
   
   // Parametric Dimensions (in mm)
   faceDiameter: 20.0,
@@ -22,6 +22,7 @@ const state = {
   emblemScale: 100,       // Percentage (50 - 130)
   postLength: 10.0,
   postDiameter: 4.5,
+  jointReinforce: 1.8,    // Conical fillet height at face-to-post joint
   buttonDiameter: 12.0,
   buttonHeight: 5.5,
   buttonConeH: 4.0,
@@ -92,14 +93,14 @@ function initThree() {
   camera.position.set(0, -35, 30);
   camera.up.set(0, 0, 1);
 
-  // WebGL Renderer
+  // WebGL Renderer with full depth-testing and opaque rendering
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.25;
   container.appendChild(renderer.domElement);
 
   // OrbitControls
@@ -121,12 +122,15 @@ function initThree() {
   cufflinkGroup = new THREE.Group();
   scene.add(cufflinkGroup);
 
-  // Default Material
+  // Completely Opaque Solid Material (Fixes semi-transparent appearance)
   currentMaterial = new THREE.MeshStandardMaterial({
     color: state.materialColor,
     roughness: state.materialRoughness,
     metalness: state.materialMetalness,
-    envMapIntensity: 1.2
+    transparent: false,
+    opacity: 1.0,
+    depthWrite: true,
+    depthTest: true
   });
 
   // Start Animation Loop
@@ -134,14 +138,19 @@ function initThree() {
 }
 
 /**
- * Lighting Setup
+ * Lighting Setup: Rich three-point lighting + ambient hemisphere
  */
 function setupLighting() {
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
   scene.add(ambientLight);
 
-  // Key Light
-  const keyLight = new THREE.DirectionalLight(0xfff8ee, 1.2);
+  // Hemisphere Light for soft non-directional fill to prevent hollow reflections
+  const hemiLight = new THREE.HemisphereLight(0xfff8ee, 0x1f2438, 0.7);
+  hemiLight.position.set(0, 0, 50);
+  scene.add(hemiLight);
+
+  // Key Light (Sun)
+  const keyLight = new THREE.DirectionalLight(0xfff8ee, 1.25);
   keyLight.position.set(25, -30, 45);
   keyLight.castShadow = true;
   keyLight.shadow.mapSize.width = 2048;
@@ -157,12 +166,12 @@ function setupLighting() {
   scene.add(keyLight);
 
   // Fill Light
-  const fillLight = new THREE.DirectionalLight(0x88bbff, 0.5);
+  const fillLight = new THREE.DirectionalLight(0x88bbff, 0.55);
   fillLight.position.set(-30, 30, 20);
   scene.add(fillLight);
 
   // Rim Light
-  const rimLight = new THREE.DirectionalLight(0xffffff, 0.7);
+  const rimLight = new THREE.DirectionalLight(0xffffff, 0.75);
   rimLight.position.set(0, 40, 10);
   scene.add(rimLight);
 }
@@ -187,7 +196,8 @@ function setupBuildPlate() {
 
 /**
  * Main Geometry Generation
- * Builds a watertight, mathematically precise button-style cufflink in Three.js
+ * Builds a watertight, mathematically solid button-style cufflink in Three.js
+ * with 45-degree Joint Reinforcement Cones and zero coplanar Z-fighting
  */
 function createCufflinkMesh(designType, monogramStr) {
   const cufflink = new THREE.Group();
@@ -197,7 +207,21 @@ function createCufflinkMesh(designType, monogramStr) {
   const rPost = state.postDiameter / 2;
   const rInner = rFace - state.borderWidth;
 
-  // 1. Solid Post
+  // 1a. BASE REINFORCEMENT CONE AT POST-TO-FACE JOINT
+  // 45-degree self-supporting transition widening from rPost to (rPost + jointReinforce)
+  // Eliminates sharp 90-degree corner stress riser and drastically increases shear strength
+  if (state.jointReinforce > 0) {
+    const rJointBase = rPost + state.jointReinforce;
+    const jointConeGeo = new THREE.CylinderGeometry(rPost, rJointBase, state.jointReinforce, 48);
+    jointConeGeo.rotateX(Math.PI / 2);
+    jointConeGeo.translate(0, 0, state.faceThickness + state.jointReinforce / 2);
+    const jointConeMesh = new THREE.Mesh(jointConeGeo, currentMaterial);
+    jointConeMesh.castShadow = true;
+    jointConeMesh.receiveShadow = true;
+    cufflink.add(jointConeMesh);
+  }
+
+  // 1b. Solid Post
   const postGeo = new THREE.CylinderGeometry(rPost, rPost, state.postLength, 48);
   postGeo.rotateX(Math.PI / 2);
   postGeo.translate(0, 0, state.faceThickness + state.postLength / 2);
@@ -207,6 +231,7 @@ function createCufflinkMesh(designType, monogramStr) {
   cufflink.add(postMesh);
 
   // 2. Rear Button Transition Cone (45 deg support-free)
+  // Widens from rPost to rButton over buttonConeH
   const coneGeo = new THREE.CylinderGeometry(rButton, rPost, state.buttonConeH, 48);
   coneGeo.rotateX(Math.PI / 2);
   coneGeo.translate(0, 0, state.faceThickness + state.postLength + state.buttonConeH / 2);
@@ -225,21 +250,44 @@ function createCufflinkMesh(designType, monogramStr) {
   domeMesh.receiveShadow = true;
   cufflink.add(domeMesh);
 
-  // 4. Base Face Disc (Front at Z=0, Rear at Z=faceThickness)
-  const faceBodyGeo = new THREE.CylinderGeometry(rFace, rFace, state.faceThickness, 64);
-  faceBodyGeo.rotateX(Math.PI / 2);
-  faceBodyGeo.translate(0, 0, state.faceThickness / 2);
-  const faceMesh = new THREE.Mesh(faceBodyGeo, currentMaterial);
-  faceMesh.castShadow = true;
-  faceMesh.receiveShadow = true;
-  cufflink.add(faceMesh);
+  // 4. BASE FACE DISC WITH RECESSED WELL (NO COPLANAR Z-FIGHTING)
+  // Instead of an overlapping solid cylinder, we separate the outer rim and the floor:
+  
+  // 4a. Outer Raised Bevelled Border Ring (Z = 0 to Z = faceThickness)
+  const borderShape = new THREE.Shape();
+  borderShape.absarc(0, 0, rFace, 0, Math.PI * 2, false);
+  const borderHole = new THREE.Path();
+  borderHole.absarc(0, 0, rInner, 0, Math.PI * 2, true);
+  borderShape.holes.push(borderHole);
 
-  // 5. Decorative Emblem Geometry on Face (Z = 0)
+  const borderGeo = new THREE.ExtrudeGeometry(borderShape, {
+    depth: state.faceThickness,
+    bevelEnabled: true,
+    bevelSize: 0.18,
+    bevelThickness: 0.18,
+    bevelSegments: 2
+  });
+  const borderMesh = new THREE.Mesh(borderGeo, currentMaterial);
+  borderMesh.castShadow = true;
+  borderMesh.receiveShadow = true;
+  cufflink.add(borderMesh);
+
+  // 4b. Recessed Cavity Floor (Z = reliefDepth to Z = faceThickness)
+  const floorThickness = Math.max(0.6, state.faceThickness - state.reliefDepth);
+  const floorGeo = new THREE.CylinderGeometry(rInner, rInner, floorThickness, 64);
+  floorGeo.rotateX(Math.PI / 2);
+  floorGeo.translate(0, 0, state.reliefDepth + floorThickness / 2);
+  const floorMesh = new THREE.Mesh(floorGeo, currentMaterial);
+  floorMesh.castShadow = true;
+  floorMesh.receiveShadow = true;
+  cufflink.add(floorMesh);
+
+  // 5. Decorative Emblem Geometry on Face
+  // Sits inside the recessed cavity from Z = 0 to Z = reliefDepth (zero overlap!)
   const reliefGroup = new THREE.Group();
   const targetEmblemSize = rInner * 2 * 0.72 * (state.emblemScale / 100);
 
   if (designType === 'custom' && state.customShapes && state.customShapes.length > 0) {
-    // Custom Extruded SVG / PNG Shapes
     const customGeo = createExtrudedShapes(state.customShapes, targetEmblemSize, state.reliefDepth);
     if (customGeo) {
       const mesh = new THREE.Mesh(customGeo, currentMaterial);
@@ -247,7 +295,6 @@ function createCufflinkMesh(designType, monogramStr) {
       reliefGroup.add(mesh);
     }
   } else if (PRESET_SVGS[designType]) {
-    // Preset SVG Emblems (PNB, Crown, Fleur-de-lis, Star)
     const shapes = parseSvgStringToShapes(PRESET_SVGS[designType]);
     if (shapes && shapes.length > 0) {
       const emblemGeo = createExtrudedShapes(shapes, targetEmblemSize, state.reliefDepth);
@@ -258,22 +305,8 @@ function createCufflinkMesh(designType, monogramStr) {
       }
     }
   } else if (designType === 'monogram') {
-    // Interlocking Monogram Shapes
     const monoGroup = createMonogramMesh(monogramStr || 'TK', targetEmblemSize);
     reliefGroup.add(monoGroup);
-  }
-
-  // Raised decorative outer border ring
-  if (designType !== 'blank') {
-    const ringShape = new THREE.Shape();
-    ringShape.absarc(0, 0, rFace, 0, Math.PI * 2, false);
-    const holePath = new THREE.Path();
-    holePath.absarc(0, 0, rInner, 0, Math.PI * 2, true);
-    ringShape.holes.push(holePath);
-
-    const ringGeo = new THREE.ExtrudeGeometry(ringShape, { depth: state.reliefDepth + 0.05, bevelEnabled: true, bevelSize: 0.15, bevelThickness: 0.15 });
-    const ringMesh = new THREE.Mesh(ringGeo, currentMaterial);
-    reliefGroup.add(ringMesh);
   }
 
   cufflink.add(reliefGroup);
@@ -300,7 +333,7 @@ function parseSvgStringToShapes(svgString) {
 }
 
 /**
- * Normalizes, Centers, and Extrudes an array of THREE.Shape into a watertight Geometry
+ * Normalizes, Centers, and Extrudes an array of THREE.Shape into a solid Geometry
  */
 function createExtrudedShapes(shapes, targetDiameter, depth) {
   if (!shapes || shapes.length === 0) return null;
@@ -310,8 +343,8 @@ function createExtrudedShapes(shapes, targetDiameter, depth) {
     bevelEnabled: true,
     bevelSegments: 2,
     steps: 1,
-    bevelSize: 0.12,
-    bevelThickness: 0.12
+    bevelSize: 0.10,
+    bevelThickness: 0.10
   };
 
   const geo = new THREE.ExtrudeGeometry(shapes, extrudeSettings);
@@ -337,11 +370,10 @@ function createExtrudedShapes(shapes, targetDiameter, depth) {
 
 /**
  * Converts a PNG / JPEG image into 2D THREE.Shape spans
- * Uses horizontal scan-line span decomposition for high performance and watertight geometry
  */
 function processRasterImageToShapes(image) {
   const canvas = document.createElement('canvas');
-  const maxRes = 64; // Grid resolution for crisp 3D printing
+  const maxRes = 64;
   let w = image.width;
   let h = image.height;
   if (w > h) {
@@ -358,13 +390,11 @@ function processRasterImageToShapes(image) {
   ctx.drawImage(image, 0, 0, w, h);
   const imgData = ctx.getImageData(0, 0, w, h).data;
 
-  // Check corner pixels to determine background brightness (auto-detect dark-on-light vs light-on-dark)
-  const cornerIdx = 0;
+  // Check corner pixels to determine background brightness
   const cornerAlpha = imgData[3];
   const cornerLum = (imgData[0] + imgData[1] + imgData[2]) / 3;
   const isLightBg = cornerAlpha > 128 && cornerLum > 128;
 
-  // Build binary grid
   const grid = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -376,13 +406,11 @@ function processRasterImageToShapes(image) {
 
       let isForeground = false;
       if (a < 50) {
-        isForeground = false; // Transparent
+        isForeground = false;
       } else if (isLightBg) {
-        // Dark emblem on light background
         const lum = (r + g + b) / 3;
         isForeground = lum < 150;
       } else {
-        // Light emblem on dark / transparent background
         const lum = (r + g + b) / 3;
         isForeground = lum > 100 && a > 100;
       }
@@ -390,7 +418,6 @@ function processRasterImageToShapes(image) {
     }
   }
 
-  // Convert contiguous horizontal runs into rectangular THREE.Shape polygons
   const shapes = [];
   for (let y = 0; y < h; y++) {
     let startX = -1;
@@ -428,30 +455,30 @@ function createMonogramMesh(text, targetSize) {
 
   if (cleanText.includes('T')) {
     // T Crossbar
-    const barGeo = new THREE.BoxGeometry(9 * s, 2.2 * s, state.reliefDepth + 0.1);
-    barGeo.translate(-1.5 * s, 5 * s, (state.reliefDepth + 0.1) / 2);
+    const barGeo = new THREE.BoxGeometry(9 * s, 2.2 * s, state.reliefDepth);
+    barGeo.translate(-1.5 * s, 5 * s, state.reliefDepth / 2);
     group.add(new THREE.Mesh(barGeo, currentMaterial));
     // T Stem
-    const stemGeo = new THREE.BoxGeometry(2.4 * s, 11 * s, state.reliefDepth + 0.1);
-    stemGeo.translate(-2 * s, 0, (state.reliefDepth + 0.1) / 2);
+    const stemGeo = new THREE.BoxGeometry(2.4 * s, 11 * s, state.reliefDepth);
+    stemGeo.translate(-2 * s, 0, state.reliefDepth / 2);
     group.add(new THREE.Mesh(stemGeo, currentMaterial));
   }
 
   if (cleanText.includes('K')) {
     // Upper diagonal arm
-    const arm1Geo = new THREE.BoxGeometry(2.2 * s, 8 * s, state.reliefDepth + 0.12);
+    const arm1Geo = new THREE.BoxGeometry(2.2 * s, 8 * s, state.reliefDepth);
     arm1Geo.rotateZ(-Math.PI / 4.2);
-    arm1Geo.translate(2.5 * s, 2.8 * s, (state.reliefDepth + 0.12) / 2);
+    arm1Geo.translate(2.5 * s, 2.8 * s, state.reliefDepth / 2);
     group.add(new THREE.Mesh(arm1Geo, currentMaterial));
 
     // Lower diagonal arm
-    const arm2Geo = new THREE.BoxGeometry(2.2 * s, 8 * s, state.reliefDepth + 0.12);
+    const arm2Geo = new THREE.BoxGeometry(2.2 * s, 8 * s, state.reliefDepth);
     arm2Geo.rotateZ(Math.PI / 4.2);
-    arm2Geo.translate(2.5 * s, -2.8 * s, (state.reliefDepth + 0.12) / 2);
+    arm2Geo.translate(2.5 * s, -2.8 * s, state.reliefDepth / 2);
     group.add(new THREE.Mesh(arm2Geo, currentMaterial));
   } else if (!cleanText.includes('T')) {
-    const boxGeo = new THREE.BoxGeometry(6 * s, 10 * s, state.reliefDepth + 0.1);
-    boxGeo.translate(0, 0, (state.reliefDepth + 0.1) / 2);
+    const boxGeo = new THREE.BoxGeometry(6 * s, 10 * s, state.reliefDepth);
+    boxGeo.translate(0, 0, state.reliefDepth / 2);
     group.add(new THREE.Mesh(boxGeo, currentMaterial));
   }
 
@@ -633,6 +660,7 @@ function setupUI() {
   bindSlider('param-face-diameter', 'val-face-diameter', 'faceDiameter', ' mm');
   bindSlider('param-post-length', 'val-post-length', 'postLength', ' mm');
   bindSlider('param-post-diameter', 'val-post-diameter', 'postDiameter', ' mm');
+  bindSlider('param-joint-reinforce', 'val-joint-reinforce', 'jointReinforce', ' mm');
   bindSlider('param-button-diameter', 'val-button-diameter', 'buttonDiameter', ' mm');
 
   // Color Swatches
@@ -716,20 +744,28 @@ function downloadSCAD() {
 // Cufflink Studio 3D - Exported Parametric OpenSCAD Source
 // ============================================================
 
-face_diameter   = ${state.faceDiameter};
-face_thickness  = ${state.faceThickness};
-relief_height   = ${state.reliefDepth};
-border_width    = ${state.borderWidth};
-post_length     = ${state.postLength};
-post_diameter   = ${state.postDiameter};
-button_diameter = ${state.buttonDiameter};
-button_height   = ${state.buttonHeight};
-button_cone_h   = ${state.buttonConeH};
+face_diameter       = ${state.faceDiameter};
+face_thickness      = ${state.faceThickness};
+relief_height       = ${state.reliefDepth};
+border_width        = ${state.borderWidth};
+post_length         = ${state.postLength};
+post_diameter       = ${state.postDiameter};
+joint_reinforcement = ${state.jointReinforce};
+button_diameter     = ${state.buttonDiameter};
+button_height       = ${state.buttonHeight};
+button_cone_h       = ${state.buttonConeH};
 $fn = 100;
 
 module cufflink_post_and_button() {
+    // 45-degree base cone for joint strength
+    translate([0, 0, face_thickness])
+        cylinder(d1=post_diameter + 2*joint_reinforcement, d2=post_diameter, h=joint_reinforcement);
+
+    // Solid post
     translate([0, 0, face_thickness])
         cylinder(d=post_diameter, h=post_length);
+
+    // Rear button transition cone
     translate([0, 0, face_thickness + post_length]) {
         cylinder(d1=post_diameter, d2=button_diameter, h=button_cone_h);
         translate([0, 0, button_cone_h])
