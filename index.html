@@ -17,6 +17,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/SVGLoader.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
 </head>
 <body>
@@ -33,30 +34,94 @@
       </div>
 
       <div class="control-scroll">
-        <!-- Section: Design Presets -->
+        <!-- Section: Emblem Selector & Uploader -->
         <section class="panel-section">
-          <label class="section-title">Design Preset</label>
-          <div class="button-group" id="design-type-group">
-            <button class="btn-toggle active" data-type="pnb">
-              <span class="icon">🏛️</span> PNB Emblem
+          <label class="section-title">Face Emblem (Select or Upload)</label>
+          <div class="emblem-gallery" id="emblem-gallery">
+            <button class="emblem-swatch active" data-id="pnb" title="PNB Official Emblem">
+              <svg viewBox="0 0 100 100" class="emblem-icon">
+                <rect x="10" y="10" width="80" height="80" rx="16" fill="#7B1123"/>
+                <path d="M 40 30 L 40 56 Q 40 70 54 70 L 60 70 L 60 30 L 72 30 L 72 70 Q 72 82 50 82 Q 28 82 28 58 L 28 30 Z" fill="#FCBF1B"/>
+                <circle cx="50" cy="45" r="9" fill="#FCBF1B"/>
+              </svg>
+              <span>PNB</span>
             </button>
-            <button class="btn-toggle" data-type="monogram">
-              <span class="icon">✨</span> Monogram
+            <button class="emblem-swatch" data-id="crest" title="Royal Crest / Crown">
+              <svg viewBox="0 0 100 100" class="emblem-icon">
+                <path d="M 20 70 L 25 35 L 40 52 L 50 25 L 60 52 L 75 35 L 80 70 Z" fill="currentColor"/>
+                <circle cx="25" cy="30" r="5" fill="currentColor"/>
+                <circle cx="50" cy="20" r="5" fill="currentColor"/>
+                <circle cx="75" cy="30" r="5" fill="currentColor"/>
+                <rect x="20" y="74" width="60" height="8" rx="3" fill="currentColor"/>
+              </svg>
+              <span>Crown</span>
             </button>
-            <button class="btn-toggle" data-type="blank">
-              <span class="icon">⚪</span> Minimal Blank
+            <button class="emblem-swatch" data-id="fleur" title="Fleur-de-lis">
+              <svg viewBox="0 0 100 100" class="emblem-icon">
+                <path d="M 50 15 C 42 32 30 45 15 50 C 32 55 42 65 44 80 L 50 78 L 56 80 C 58 65 68 55 85 50 C 70 45 58 32 50 15 Z" fill="currentColor"/>
+                <circle cx="50" cy="52" r="6" fill="currentColor"/>
+              </svg>
+              <span>Fleur</span>
             </button>
+            <button class="emblem-swatch" data-id="star" title="Compass Star">
+              <svg viewBox="0 0 100 100" class="emblem-icon">
+                <polygon points="50,15 58,40 85,50 58,60 50,85 42,60 15,50 42,40" fill="currentColor"/>
+                <circle cx="50" cy="50" r="6" fill="none" stroke="currentColor" stroke-width="4"/>
+              </svg>
+              <span>Star</span>
+            </button>
+            <button class="emblem-swatch" data-id="monogram" title="Monogram (Custom Letters)">
+              <div class="emblem-text-preview" id="monogram-preview-icon">TK</div>
+              <span>Letters</span>
+            </button>
+            <button class="emblem-swatch" data-id="blank" title="Plain Minimalist">
+              <div class="emblem-blank-preview"></div>
+              <span>Blank</span>
+            </button>
+          </div>
+
+          <!-- Custom File Upload Button -->
+          <div class="upload-zone" id="upload-zone">
+            <input type="file" id="emblem-file-input" accept=".svg,.png,.jpg,.jpeg" style="display:none;">
+            <button class="btn-upload" id="btn-trigger-upload">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Choose Custom SVG / PNG
+            </button>
+            <div class="upload-filename" id="upload-filename">Drag & drop or click to upload logo</div>
           </div>
         </section>
 
-        <!-- Monogram Settings (Conditional) -->
+        <!-- Monogram Letters Input (shown if Monogram selected) -->
         <section class="panel-section" id="monogram-controls" style="display: none;">
-          <label class="section-title">Monogram Initials</label>
+          <label class="section-title">Monogram Letters</label>
           <div class="input-with-button">
             <input type="text" id="monogram-input" maxlength="3" value="TK" placeholder="TK">
             <span class="badge">1-3 Chars</span>
           </div>
-          <div class="input-hint">Optimized with interlocked serif geometry for 0.4mm nozzle.</div>
+          <div class="input-hint">Serif geometry optimized for 0.4mm nozzle.</div>
+        </section>
+
+        <!-- Emblem Scale & Relief Depth -->
+        <section class="panel-section" id="emblem-tuning-section">
+          <div class="slider-control">
+            <div class="slider-header">
+              <span>Emblem Scale</span>
+              <span class="slider-val" id="val-emblem-scale">100%</span>
+            </div>
+            <input type="range" id="param-emblem-scale" min="50" max="130" step="5" value="100">
+          </div>
+
+          <div class="slider-control">
+            <div class="slider-header">
+              <span>Relief Height</span>
+              <span class="slider-val" id="val-relief-depth">0.8 mm</span>
+            </div>
+            <input type="range" id="param-relief-depth" min="0.4" max="1.4" step="0.1" value="0.8">
+          </div>
         </section>
 
         <!-- Section: Quantity / Layout -->
