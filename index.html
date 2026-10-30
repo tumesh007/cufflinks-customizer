@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cufflink Studio 3D | Parametric CAD & 3D Print Customizer</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Application CSS -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Three.js and Dependencies from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Sidebar Control Panel -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <div class="brand-logo-badge">3D</div>
+        <div>
+          <h1>Cufflink Studio</h1>
+          <p class="subtitle">Parametric FDM Jewelry CAD</p>
+        </div>
+      </div>
+
+      <div class="control-scroll">
+        <!-- Section: Design Presets -->
+        <section class="panel-section">
+          <label class="section-title">Design Preset</label>
+          <div class="button-group" id="design-type-group">
+            <button class="btn-toggle active" data-type="pnb">
+              <span class="icon">🏛️</span> PNB Emblem
+            </button>
+            <button class="btn-toggle" data-type="monogram">
+              <span class="icon">✨</span> Monogram
+            </button>
+            <button class="btn-toggle" data-type="blank">
+              <span class="icon">⚪</span> Minimal Blank
+            </button>
+          </div>
+        </section>
+
+        <!-- Monogram Settings (Conditional) -->
+        <section class="panel-section" id="monogram-controls" style="display: none;">
+          <label class="section-title">Monogram Initials</label>
+          <div class="input-with-button">
+            <input type="text" id="monogram-input" maxlength="3" value="TK" placeholder="TK">
+            <span class="badge">1-3 Chars</span>
+          </div>
+          <div class="input-hint">Optimized with interlocked serif geometry for 0.4mm nozzle.</div>
+        </section>
+
+        <!-- Section: Quantity / Layout -->
+        <section class="panel-section">
+          <label class="section-title">Quantity / Build Plate Layout</label>
+          <div class="button-group grid-4" id="layout-group">
+            <button class="btn-toggle active" data-count="1">1 pc</button>
+            <button class="btn-toggle" data-count="2">Pair (2)</button>
+            <button class="btn-toggle" data-count="4">Tray (4)</button>
+            <button class="btn-toggle" data-count="8">Tray (8)</button>
+          </div>
+        </section>
+
+        <!-- Section: Parametric Dimensions -->
+        <section class="panel-section">
+          <div class="collapsible-header">
+            <label class="section-title">Parametric Dimensions (mm)</label>
+          </div>
+          
+          <div class="slider-control">
+            <div class="slider-header">
+              <span>Face Diameter</span>
+              <span class="slider-val" id="val-face-diameter">20.0 mm</span>
+            </div>
+            <input type="range" id="param-face-diameter" min="16" max="24" step="0.5" value="20">
+          </div>
+
+          <div class="slider-control">
+            <div class="slider-header">
+              <span>Post Length</span>
+              <span class="slider-val" id="val-post-length">10.0 mm</span>
+            </div>
+            <input type="range" id="param-post-length" min="7" max="14" step="0.5" value="10">
+          </div>
+
+          <div class="slider-control">
+            <div class="slider-header">
+              <span>Post Diameter</span>
+              <span class="slider-val" id="val-post-diameter">4.5 mm</span>
+            </div>
+            <input type="range" id="param-post-diameter" min="3.5" max="6.0" step="0.5" value="4.5">
+          </div>
+
+          <div class="slider-control">
+            <div class="slider-header">
+              <span>Rear Button Diameter</span>
+              <span class="slider-val" id="val-button-diameter">12.0 mm</span>
+            </div>
+            <input type="range" id="param-button-diameter" min="9" max="15" step="0.5" value="12">
+          </div>
+        </section>
+
+        <!-- Section: Material & Appearance -->
+        <section class="panel-section">
+          <label class="section-title">Material Visualizer</label>
+          <div class="color-palette" id="color-palette">
+            <button class="color-swatch active" data-color="#D4AF37" data-name="Silk Gold" title="Silk Gold" style="background: linear-gradient(135deg, #ffd700, #b8860b);"></button>
+            <button class="color-swatch" data-color="#C0C0C0" data-name="Polished Silver" title="Polished Silver" style="background: linear-gradient(135deg, #f5f5f5, #999999);"></button>
+            <button class="color-swatch" data-color="#7B1123" data-name="PNB Burgundy" title="PNB Burgundy" style="background: #7B1123;"></button>
+            <button class="color-swatch" data-color="#1E1E1E" data-name="Matte Black" title="Matte Black" style="background: #1e1e1e;"></button>
+            <button class="color-swatch" data-color="#B87333" data-name="Copper" title="Copper" style="background: linear-gradient(135deg, #e67e22, #b87333);"></button>
+          </div>
+          <div class="palette-caption" id="material-name">Silk Gold</div>
+        </section>
+
+        <!-- Section: Slicer Spec Callout -->
+        <section class="panel-section spec-card">
+          <div class="spec-header">
+            <span class="spec-icon">⚡</span>
+            <strong>Bambu Lab A1 Mini Target</strong>
+          </div>
+          <ul class="spec-list">
+            <li><span>Orientation:</span> <strong>Face-down (Z=0)</strong></li>
+            <li><span>Supports:</span> <strong>Zero (Self-supporting 45°)</strong></li>
+            <li><span>Layer Height:</span> <strong>0.16 mm - 0.20 mm</strong></li>
+            <li><span>Infill:</span> <strong>100% (Dense solid feel)</strong></li>
+            <li><span>Dual-Color:</span> <strong>Pause at layer 0.8mm</strong></li>
+          </ul>
+        </section>
+      </div>
+
+      <!-- Footer Export Actions -->
+      <div class="sidebar-footer">
+        <button class="btn-primary" id="btn-download-stl">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export STL for Slicing
+        </button>
+        <button class="btn-secondary" id="btn-download-scad">
+          Download Parametric OpenSCAD (.scad)
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main 3D Viewport -->
+    <main class="viewport-container">
+      <div id="webgl-canvas-container"></div>
+      
+      <!-- Viewport Floating Overlay Controls -->
+      <div class="viewport-overlay top-left">
+        <div class="info-tag" id="status-tag">Status: Ready</div>
+        <div class="info-tag-sub" id="manifold-tag">✓ Manifold & Watertight</div>
+      </div>
+
+      <div class="viewport-overlay top-right">
+        <div class="camera-controls">
+          <button class="cam-btn" id="cam-isometric" title="Perspective / Isometric">3D</button>
+          <button class="cam-btn" id="cam-top" title="Top / Face View">Top</button>
+          <button class="cam-btn" id="cam-side" title="Side Profile">Side</button>
+          <button class="cam-btn" id="cam-bottom" title="Rear Button">Back</button>
+        </div>
+      </div>
+
+      <div class="viewport-overlay bottom-center">
+        <div class="hint-pill">
+          <span>Left click: Orbit</span> • <span>Right click: Pan</span> • <span>Scroll: Zoom</span>
+        </div>
+      </div>
+
+      <!-- Print Bed Grid Legend -->
+      <div class="viewport-overlay bottom-right">
+        <div class="bed-size-badge">Bambu A1 Mini Bed (180 × 180 mm)</div>
+      </div>
+
+      <!-- Loading Spinner -->
+      <div class="loading-overlay" id="loading-spinner">
+        <div class="spinner"></div>
+        <div class="spinner-text">Generating 3D Mesh...</div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
